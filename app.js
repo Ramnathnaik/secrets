@@ -4,7 +4,9 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
+const bcrypt = require('bcrypt');
+
+const saltRounds = 10;
 
 const app = express();
 
@@ -22,7 +24,7 @@ const userSchema = new mongoose.Schema({
   password: String
 });
 
-userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptedFields: ['password']});
+// userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptedFields: ['password']});
 
 const User = mongoose.model("User", userSchema);
 
@@ -40,17 +42,20 @@ app.post("/register", function(req, res){
       if (foundUser){
         res.send("User Exists");
       } else {
-        const user = new User({
-          email: req.body.username,
-          password: req.body.password
-        });
 
-        user.save(function(err){
-          if (!err){
-            res.render("secrets");
-          } else {
-            res.send(err);
-          }
+        bcrypt.hash(req.body.password, saltRounds, function(err, hash) {
+          const user = new User({
+            email: req.body.username,
+            password: hash
+          });
+
+          user.save(function(err){
+            if (!err){
+              res.render("secrets");
+            } else {
+              res.send(err);
+            }
+          });
         });
 
       }
@@ -69,11 +74,13 @@ app.post("/login", function(req, res){
   User.findOne({email: req.body.username}, function(err, foundUser){
     if (!err) {
       if (foundUser) {
-        if (foundUser.password === req.body.password){
-          res.render("secrets");
-        } else {
-          res.send("Password does not match!");
-        }
+        bcrypt.compare(req.body.password, foundUser.password, function(err, result) {
+          if (result === true) {
+            res.render("secrets");
+          } else {
+            res.send("Password does not match!");
+          }
+        });
       } else {
         res.send("Account does not exists!");
       }
